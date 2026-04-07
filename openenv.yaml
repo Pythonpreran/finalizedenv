@@ -1,0 +1,79 @@
+# OpenEnv Environment Manifest
+# ICU Drug Titration Environment
+
+name: icu_drug_titration
+version: "1.0.0"
+description: >
+  An OpenEnv-compliant RL environment for ICU clinical pharmacology simulation.
+  An AI agent acts as a clinical pharmacist managing drug titration over a
+  24-hour simulated patient episode with deterministic pharmacology.
+
+author: "ICU-RL Team"
+license: "MIT"
+
+# Environment models
+models:
+  action: models.Action
+  observation: models.Observation
+  state: models.State
+
+# Action schema (matches models.Action)
+action_schema:
+  action_type:
+    type: string
+    enum: [add_drug, titrate, remove_drug, hold, order_lab, flag_physician]
+    required: true
+  drug:
+    type: string
+    required: false
+    description: "Drug name (required for add_drug, titrate, remove_drug)"
+  dose:
+    type: number
+    required: false
+    description: "Drug dose (required for add_drug, titrate)"
+
+# Server configuration
+server:
+  entrypoint: app:app
+  port: 7860
+  framework: fastapi
+
+# Docker configuration
+docker:
+  dockerfile: Dockerfile
+  base_image: python:3.11-slim
+
+# Task definitions
+tasks:
+  easy:
+    name: "MAP Control with Norepinephrine"
+    description: "Control MAP using norepinephrine in vasopressor shock"
+    horizon: 12
+    difficulty: easy
+
+  medium:
+    name: "Multi-Drug Ventilated Sedation"
+    description: "Manage ventilated patient with sedation, analgesia, and hemodynamic support"
+    horizon: 20
+    difficulty: medium
+
+  hard:
+    name: "Septic Shock with Renal Failure"
+    description: "Manage septic shock with AKI, multi-drug titration and renal constraints"
+    horizon: 24
+    difficulty: hard
+
+# Evaluation
+evaluation:
+  grader: grader.grade_trajectory
+  deterministic: true
+  score_range: [0.0, 1.0]
+
+# Tags for discovery
+tags:
+  - healthcare
+  - icu
+  - pharmacology
+  - drug-titration
+  - clinical
+  - reinforcement-learning

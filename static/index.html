@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ICU Drug Titration Monitor</title>
+    <meta name="description" content="Real-time ICU drug titration monitoring dashboard for AI-driven clinical pharmacology">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-secondary: #111827;
+            --bg-card: #1a2236;
+            --bg-card-hover: #1f2a42;
+            --border: #2a3555;
+            --text-primary: #e8ecf4;
+            --text-secondary: #8892a8;
+            --text-muted: #5a6478;
+            --accent-blue: #3b82f6;
+            --accent-cyan: #06b6d4;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --accent-amber: #f59e0b;
+            --accent-purple: #8b5cf6;
+            --accent-pink: #ec4899;
+            --glow-blue: rgba(59, 130, 246, 0.15);
+            --glow-green: rgba(16, 185, 129, 0.15);
+            --glow-red: rgba(239, 68, 68, 0.15);
+            --glow-amber: rgba(245, 158, 11, 0.15);
+            --radius: 12px;
+            --radius-sm: 8px;
+            --shadow: 0 4px 24px rgba(0,0,0,0.3);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* === HEADER === */
+        .header {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-card) 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(12px);
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .logo-icon {
+            width: 38px; height: 38px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; font-weight: 700;
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.3);
+        }
+        .header h1 {
+            font-size: 18px; font-weight: 600;
+            background: linear-gradient(135deg, #e8ecf4, #06b6d4);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .header-subtitle {
+            font-size: 11px; color: var(--text-muted); margin-top: 2px;
+            font-family: 'JetBrains Mono', monospace; letter-spacing: 0.5px;
+        }
+        .header-right {
+            display: flex; align-items: center; gap: 16px;
+        }
+        .status-badge {
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 14px; border-radius: 20px;
+            font-size: 12px; font-weight: 500;
+            background: var(--glow-green); color: var(--accent-green);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+        .status-badge.offline { background: var(--glow-red); color: var(--accent-red); border-color: rgba(239, 68, 68, 0.2); }
+        .status-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; } 50% { opacity: 0.4; }
+        }
+
+        /* === LAYOUT === */
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            grid-template-rows: auto 1fr;
+            gap: 16px;
+            padding: 16px 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+            min-height: calc(100vh - 70px);
+        }
+
+        /* === CONTROL BAR === */
+        .control-bar {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .task-select, .action-select, .drug-select, .dose-input {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 10px 14px;
+            border-radius: var(--radius-sm);
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .task-select:focus, .action-select:focus, .drug-select:focus, .dose-input:focus {
+            border-color: var(--accent-blue);
+        }
+        .dose-input { width: 100px; }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+            color: white;
+            box-shadow: 0 0 16px rgba(59, 130, 246, 0.25);
+        }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 0 24px rgba(59, 130, 246, 0.4); }
+        .btn-success {
+            background: linear-gradient(135deg, var(--accent-green), #059669);
+            color: white;
+        }
+        .btn-success:hover { transform: translateY(-1px); }
+        .btn-danger {
+            background: linear-gradient(135deg, var(--accent-red), #dc2626);
+            color: white;
+        }
+        .btn-danger:hover { transform: translateY(-1px); }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+        .btn-outline:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+        .spacer { flex: 1; }
+
+        /* === MAIN AREA === */
+        .main-area {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* === CARD === */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+        .card-header {
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+            background: rgba(255,255,255,0.01);
+        }
+        .card-title {
+            font-size: 13px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.8px;
+            color: var(--text-secondary);
+            display: flex; align-items: center; gap: 8px;
+        }
+        .card-title .icon { font-size: 15px; }
+        .card-body { padding: 16px 18px; }
+
+        /* === VITALS GRID === */
+        .vitals-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+        }
+        .vital-tile {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+            text-align: center;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        .vital-tile::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--accent-blue);
+            transition: background 0.3s;
+        }
+        .vital-tile.safe::before { background: var(--accent-green); }
+        .vital-tile.warning::before { background: var(--accent-amber); }
+        .vital-tile.danger::before { background: var(--accent-red); }
+        .vital-tile.safe { border-color: rgba(16, 185, 129, 0.2); }
+        .vital-tile.danger { border-color: rgba(239, 68, 68, 0.2); background: rgba(239, 68, 68, 0.05); }
+        .vital-label {
+            font-size: 10px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 1px;
+            color: var(--text-muted); margin-bottom: 8px;
+        }
+        .vital-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 28px; font-weight: 700;
+            line-height: 1;
+        }
+        .vital-tile.safe .vital-value { color: var(--accent-green); }
+        .vital-tile.danger .vital-value { color: var(--accent-red); }
+        .vital-tile.warning .vital-value { color: var(--accent-amber); }
+        .vital-unit {
+            font-size: 10px; color: var(--text-muted);
+            margin-top: 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .vital-range {
+            font-size: 9px; color: var(--text-muted);
+            margin-top: 6px; opacity: 0.7;
+        }
+
+        /* === LABS GRID === */
+        .labs-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        /* === CHARTS === */
+        .chart-container {
+            height: 220px;
+            position: relative;
+        }
+
+        /* === SIDEBAR (RIGHT PANEL) === */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* === DRUGS PANEL === */
+        .drug-item {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 14px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            margin-bottom: 8px;
+            transition: all 0.2s;
+        }
+        .drug-item:hover { border-color: var(--accent-blue); }
+        .drug-name {
+            font-size: 13px; font-weight: 600;
+            color: var(--accent-cyan);
+        }
+        .drug-dose {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px; color: var(--text-secondary);
+        }
+        .no-drugs {
+            color: var(--text-muted);
+            font-size: 12px;
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+        }
+
+        /* === LOG === */
+        .log-container {
+            max-height: 360px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border) transparent;
+        }
+        .log-entry {
+            padding: 8px 12px;
+            border-bottom: 1px solid rgba(42, 53, 85, 0.5);
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            display: flex; align-items: flex-start; gap: 8px;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .log-step {
+            color: var(--text-muted); min-width: 32px; font-weight: 600;
+        }
+        .log-action { color: var(--accent-cyan); }
+        .log-reward { color: var(--accent-green); }
+        .log-reward.negative { color: var(--accent-red); }
+        .log-alert { color: var(--accent-amber); font-size: 10px; }
+        .log-alert.critical { color: var(--accent-red); }
+
+        /* === SCORE DISPLAY === */
+        .score-display {
+            text-align: center; padding: 20px;
+        }
+        .score-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 48px; font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-green));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .score-label {
+            font-size: 11px; color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: 1px;
+            margin-top: 4px;
+        }
+
+        /* === EPISODE INFO === */
+        .episode-info {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .info-item {
+            background: var(--bg-secondary);
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+        }
+        .info-label {
+            font-size: 9px; color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .info-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px; font-weight: 600;
+            margin-top: 2px;
+        }
+
+        /* === RESPONSIVE === */
+        @media (max-width: 1100px) {
+            .dashboard { grid-template-columns: 1fr; }
+            .vitals-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+        @media (max-width: 600px) {
+            .vitals-grid { grid-template-columns: repeat(2, 1fr); }
+            .labs-grid { grid-template-columns: repeat(2, 1fr); }
+            .control-bar { flex-direction: column; align-items: stretch; }
+        }
+    </style>
+</head>
+<body>
+    <!-- HEADER -->
+    <header class="header">
+        <div class="header-left">
+            <div class="logo-icon">⚕</div>
+            <div>
+                <h1>ICU Drug Titration Monitor</h1>
+                <div class="header-subtitle">OPENENV RL ENVIRONMENT v1.0</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <div id="statusBadge" class="status-badge offline">
+                <span class="status-dot"></span>
+                <span id="statusText">IDLE</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- DASHBOARD -->
+    <div class="dashboard">
+        <!-- CONTROL BAR -->
+        <div class="control-bar">
+            <select id="taskSelect" class="task-select">
+                <option value="easy">🟢 Easy — MAP Control</option>
+                <option value="medium">🟡 Medium — Multi-Drug Sedation</option>
+                <option value="hard">🔴 Hard — Septic Shock + Renal</option>
+            </select>
+            <button id="btnReset" class="btn btn-primary" onclick="resetEnv()">⟲ Reset</button>
+            <div class="spacer"></div>
+            <select id="actionSelect" class="action-select" disabled>
+                <option value="add_drug">Add Drug</option>
+                <option value="titrate">Titrate</option>
+                <option value="remove_drug">Remove Drug</option>
+                <option value="hold">Hold</option>
+                <option value="order_lab">Order Lab</option>
+                <option value="flag_physician">Flag Physician</option>
+            </select>
+            <select id="drugSelect" class="drug-select" disabled>
+                <option value="">— Drug —</option>
+            </select>
+            <input id="doseInput" type="number" class="dose-input" placeholder="Dose" step="0.01" disabled>
+            <button id="btnStep" class="btn btn-success" onclick="stepEnv()" disabled>▶ Step</button>
+            <button id="btnGrade" class="btn btn-outline" onclick="gradeEpisode()" disabled>📊 Grade</button>
+        </div>
+
+        <!-- MAIN AREA -->
+        <div class="main-area">
+            <!-- VITALS -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title"><span class="icon">♥</span> Vital Signs</span>
+                    <span id="vitalsSummary" style="font-size:11px;color:var(--text-muted)"></span>
+                </div>
+                <div class="card-body">
+                    <div class="vitals-grid" id="vitalsGrid">
+                        <div class="vital-tile" id="tile-map">
+                            <div class="vital-label">MAP</div>
+                            <div class="vital-value" id="val-map">—</div>
+                            <div class="vital-unit">mmHg</div>
+                            <div class="vital-range">65 – 90</div>
+                        </div>
+                        <div class="vital-tile" id="tile-hr">
+                            <div class="vital-label">HR</div>
+                            <div class="vital-value" id="val-hr">—</div>
+                            <div class="vital-unit">bpm</div>
+                            <div class="vital-range">60 – 100</div>
+                        </div>
+                        <div class="vital-tile" id="tile-spo2">
+                            <div class="vital-label">SpO₂</div>
+                            <div class="vital-value" id="val-spo2">—</div>
+                            <div class="vital-unit">%</div>
+                            <div class="vital-range">94 – 100</div>
+                        </div>
+                        <div class="vital-tile" id="tile-rr">
+                            <div class="vital-label">RR</div>
+                            <div class="vital-value" id="val-rr">—</div>
+                            <div class="vital-unit">br/min</div>
+                            <div class="vital-range">12 – 20</div>
+                        </div>
+                        <div class="vital-tile" id="tile-temp">
+                            <div class="vital-label">TEMP</div>
+                            <div class="vital-value" id="val-temp">—</div>
+                            <div class="vital-unit">°C</div>
+                            <div class="vital-range">36.5 – 37.5</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LABS -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title"><span class="icon">🧪</span> Laboratory Values</span>
+                </div>
+                <div class="card-body">
+                    <div class="labs-grid" id="labsGrid">
+                        <div class="vital-tile" id="tile-glucose">
+                            <div class="vital-label">Glucose</div>
+                            <div class="vital-value" id="val-glucose">—</div>
+                            <div class="vital-unit">mg/dL</div>
+                            <div class="vital-range">70 – 180</div>
+                        </div>
+                        <div class="vital-tile" id="tile-creatinine">
+                            <div class="vital-label">Creatinine</div>
+                            <div class="vital-value" id="val-creatinine">—</div>
+                            <div class="vital-unit">mg/dL</div>
+                            <div class="vital-range">0.6 – 1.2</div>
+                        </div>
+                        <div class="vital-tile" id="tile-potassium">
+                            <div class="vital-label">K⁺</div>
+                            <div class="vital-value" id="val-potassium">—</div>
+                            <div class="vital-unit">mEq/L</div>
+                            <div class="vital-range">3.5 – 5.0</div>
+                        </div>
+                        <div class="vital-tile" id="tile-lactate">
+                            <div class="vital-label">Lactate</div>
+                            <div class="vital-value" id="val-lactate">—</div>
+                            <div class="vital-unit">mmol/L</div>
+                            <div class="vital-range">0.5 – 2.0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TRENDS CHART -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title"><span class="icon">📈</span> Vital Trends</span>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="vitalsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SIDEBAR -->
+        <div class="sidebar">
+            <!-- EPISODE INFO -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title"><span class="icon">ℹ</span> Episode</span>
+                </div>
+                <div class="card-body">
+                    <div class="episode-info">
+                        <div class="info-item">
+                            <div class="info-label">Step</div>
+                            <div class="info-value" id="infoStep">—</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Horizon</div>
+                            <div class="info-value" id="infoHorizon">—</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Total Reward</div>
+                            <div class="info-value" id="infoReward">—</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Disease</div>
+                            <div class="info-value" id="infoDisease" style="font-size:10px">—</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ACTIVE DRUGS -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title"><span class="icon">💊</span> Active Drugs</span>
+                    <span id="drugCount" style="font-size:11px;color:var(--text-muted)">0</span>
+                </div>
+                <div class="card-body" id="drugsPanel">
+                    <div class="no-drugs">No active infusions</div>
+                </div>
+            </div>
+
+            <!-- GRADING -->
+            <div class="card" id="gradeCard" style="display:none">
+                <div class="card-header">
+                    <span class="card-title"><span class="icon">🏆</span> Grade</span>
+                </div>
+                <div class="card-body">
+                    <div class="score-display">
+                        <div class="score-value" id="gradeScore">—</div>
+                        <div class="score-label" id="gradeLabel">Final Score</div>
+                    </div>
+                    <div id="gradeBreakdown"></div>
+                </div>
+            </div>
+
+            <!-- ACTION LOG -->
+            <div class="card" style="flex:1">
+                <div class="card-header">
+                    <span class="card-title"><span class="icon">📋</span> Action Log</span>
+                    <span id="logCount" style="font-size:11px;color:var(--text-muted)">0 entries</span>
+                </div>
+                <div class="log-container" id="logContainer">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // =========================================================================
+    // STATE
+    // =========================================================================
+    let sessionId = null;
+    let currentStep = 0;
+    let totalReward = 0;
+    let isDone = false;
+    let vitalsHistory = { map: [], hr: [], spo2: [], rr: [], temp: [] };
+    let vitalsChart = null;
+    let allowedDrugs = [];
+
+    const API = window.location.origin;
+
+    const VITAL_RANGES = {
+        map: [65, 90], hr: [60, 100], spo2: [94, 100], rr: [12, 20], temp: [36.5, 37.5]
+    };
+    const LAB_RANGES = {
+        glucose: [70, 180], creatinine: [0.6, 1.2], potassium: [3.5, 5.0], lactate: [0.5, 2.0]
+    };
+
+    // =========================================================================
+    // CHART INIT
+    // =========================================================================
+    function initChart() {
+        const ctx = document.getElementById('vitalsChart').getContext('2d');
+        vitalsChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'MAP', data: [], borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', tension: 0.3, borderWidth: 2, pointRadius: 3, fill: false },
+                    { label: 'HR', data: [], borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)', tension: 0.3, borderWidth: 2, pointRadius: 3, fill: false },
+                    { label: 'SpO2', data: [], borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', tension: 0.3, borderWidth: 2, pointRadius: 3, fill: false },
+                    { label: 'RR', data: [], borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', tension: 0.3, borderWidth: 2, pointRadius: 3, fill: false },
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: '#8892a8', font: { family: 'Inter', size: 11 } } }
+                },
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Step (Hour)', color: '#5a6478', font: { size: 11 } },
+                        ticks: { color: '#5a6478' },
+                        grid: { color: 'rgba(42,53,85,0.5)' }
+                    },
+                    y: {
+                        ticks: { color: '#5a6478' },
+                        grid: { color: 'rgba(42,53,85,0.5)' }
+                    }
+                },
+                animation: { duration: 400 }
+            }
+        });
+    }
+
+    // =========================================================================
+    // API CALLS
+    // =========================================================================
+    async function resetEnv() {
+        const taskId = document.getElementById('taskSelect').value;
+        try {
+            const res = await fetch(`${API}/reset`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ task_id: taskId })
+            });
+            const data = await res.json();
+            sessionId = data.session_id;
+            currentStep = 0;
+            totalReward = 0;
+            isDone = false;
+            vitalsHistory = { map: [], hr: [], spo2: [], rr: [], temp: [] };
+
+            // Get task info for allowed drugs
+            const tasksRes = await fetch(`${API}/tasks`);
+            const tasks = await tasksRes.json();
+            const task = tasks.find(t => t.task_id === taskId);
+            allowedDrugs = task ? task.allowed_drugs : [];
+            updateDrugSelect();
+
+            updateUI(data.observation);
+            resetChart();
+            addChartPoint(data.observation);
+            clearLog();
+            addLog(0, 'RESET', `Task: ${taskId} | Disease: ${data.observation.disease}`);
+            setStatus(true);
+            enableControls(true);
+            document.getElementById('gradeCard').style.display = 'none';
+        } catch(e) {
+            console.error('Reset failed:', e);
+            addLog(0, 'ERROR', e.message);
+        }
+    }
+
+    async function stepEnv() {
+        if (!sessionId || isDone) return;
+        const actionType = document.getElementById('actionSelect').value;
+        const drugName = document.getElementById('drugSelect').value;
+        const doseVal = document.getElementById('doseInput').value;
+
+        const action = { action_type: actionType };
+        if (['add_drug', 'titrate', 'remove_drug'].includes(actionType)) {
+            action.drug_name = drugName || null;
+        }
+        if (['add_drug', 'titrate'].includes(actionType) && doseVal) {
+            action.dose = parseFloat(doseVal);
+        }
+
+        try {
+            const res = await fetch(`${API}/step?session_id=${sessionId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action })
+            });
+            const data = await res.json();
+            currentStep++;
+            totalReward += data.reward.value;
+
+            updateUI(data.observation);
+            addChartPoint(data.observation);
+
+            // Log
+            let actionStr = actionType;
+            if (action.drug_name) actionStr += ` ${action.drug_name}`;
+            if (action.dose) actionStr += ` @ ${action.dose}`;
+            addLog(currentStep, actionStr, `R: ${data.reward.value.toFixed(3)}`);
+
+            // Alerts
+            if (data.observation.alerts) {
+                data.observation.alerts.forEach(a => {
+                    addAlert(currentStep, a.severity, a.message);
+                });
+            }
+
+            if (data.done) {
+                isDone = true;
+                enableControls(false);
+                setStatus(false);
+                addLog(currentStep, 'DONE', data.info.done_reason || 'Episode ended');
+                document.getElementById('btnGrade').disabled = false;
+            }
+        } catch(e) {
+            console.error('Step failed:', e);
+            addLog(currentStep, 'ERROR', e.message);
+        }
+    }
+
+    async function gradeEpisode() {
+        if (!sessionId) return;
+        try {
+            const res = await fetch(`${API}/grader?session_id=${sessionId}`);
+            const data = await res.json();
+            document.getElementById('gradeCard').style.display = 'block';
+            document.getElementById('gradeScore').textContent = (data.score * 100).toFixed(1) + '%';
+            document.getElementById('gradeLabel').textContent = `${data.task_id.toUpperCase()} — ${data.total_steps} steps`;
+
+            // Breakdown
+            const bd = document.getElementById('gradeBreakdown');
+            bd.innerHTML = '';
+            for (const [k, v] of Object.entries(data.breakdown)) {
+                const div = document.createElement('div');
+                div.style.cssText = 'display:flex;justify-content:space-between;padding:4px 0;font-size:11px;border-bottom:1px solid rgba(42,53,85,0.5)';
+                div.innerHTML = `<span style="color:var(--text-secondary)">${k.replace(/_/g, ' ')}</span>
+                    <span style="font-family:'JetBrains Mono';color:var(--accent-cyan)">${(v * 100).toFixed(1)}%</span>`;
+                bd.appendChild(div);
+            }
+        } catch(e) {
+            console.error('Grade failed:', e);
+        }
+    }
+
+    // =========================================================================
+    // UI UPDATES
+    // =========================================================================
+    function updateUI(obs) {
+        // Vitals
+        const vitals = obs.vitals;
+        const vir = obs.vitals_in_range || {};
+        for (const [key, val] of Object.entries(vitals)) {
+            const el = document.getElementById(`val-${key}`);
+            const tile = document.getElementById(`tile-${key}`);
+            if (el) {
+                el.textContent = key === 'temp' ? val.toFixed(1) : Math.round(val);
+            }
+            if (tile) {
+                tile.classList.remove('safe', 'danger', 'warning');
+                if (vir[key] === true) tile.classList.add('safe');
+                else if (vir[key] === false) tile.classList.add('danger');
+            }
+        }
+
+        // Labs
+        const labs = obs.labs;
+        const lir = obs.labs_in_range || {};
+        for (const [key, val] of Object.entries(labs)) {
+            const el = document.getElementById(`val-${key}`);
+            const tile = document.getElementById(`tile-${key}`);
+            if (el) {
+                el.textContent = key === 'glucose' ? Math.round(val) : val.toFixed(2);
+            }
+            if (tile) {
+                tile.classList.remove('safe', 'danger', 'warning');
+                if (lir[key] === true) tile.classList.add('safe');
+                else if (lir[key] === false) tile.classList.add('danger');
+            }
+        }
+
+        // Active Drugs
+        const dp = document.getElementById('drugsPanel');
+        const drugs = obs.active_drugs || [];
+        document.getElementById('drugCount').textContent = drugs.length;
+        if (drugs.length === 0) {
+            dp.innerHTML = '<div class="no-drugs">No active infusions</div>';
+        } else {
+            dp.innerHTML = drugs.map(d =>
+                `<div class="drug-item">
+                    <span class="drug-name">${d.drug_name}</span>
+                    <span class="drug-dose">${d.current_dose} ${d.unit}</span>
+                </div>`
+            ).join('');
+        }
+
+        // Episode Info
+        document.getElementById('infoStep').textContent = `${obs.current_step} / ${obs.max_steps}`;
+        document.getElementById('infoHorizon').textContent = obs.max_steps;
+        document.getElementById('infoReward').textContent = totalReward.toFixed(3);
+        document.getElementById('infoDisease').textContent = obs.disease.replace(/_/g, ' ');
+
+        // Vitals summary
+        const safeCount = Object.values(vir).filter(v => v).length;
+        document.getElementById('vitalsSummary').textContent = `${safeCount}/5 in range`;
+    }
+
+    function updateDrugSelect() {
+        const sel = document.getElementById('drugSelect');
+        sel.innerHTML = '<option value="">— Drug —</option>';
+        allowedDrugs.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d;
+            opt.textContent = d;
+            sel.appendChild(opt);
+        });
+    }
+
+    function setStatus(active) {
+        const badge = document.getElementById('statusBadge');
+        const text = document.getElementById('statusText');
+        if (active) {
+            badge.classList.remove('offline');
+            text.textContent = 'ACTIVE';
+        } else {
+            badge.classList.add('offline');
+            text.textContent = isDone ? 'DONE' : 'IDLE';
+        }
+    }
+
+    function enableControls(enabled) {
+        document.getElementById('actionSelect').disabled = !enabled;
+        document.getElementById('drugSelect').disabled = !enabled;
+        document.getElementById('doseInput').disabled = !enabled;
+        document.getElementById('btnStep').disabled = !enabled;
+        document.getElementById('btnGrade').disabled = true;
+    }
+
+    // =========================================================================
+    // CHART
+    // =========================================================================
+    function resetChart() {
+        vitalsChart.data.labels = [];
+        vitalsChart.data.datasets.forEach(ds => ds.data = []);
+        vitalsChart.update();
+    }
+
+    function addChartPoint(obs) {
+        const v = obs.vitals;
+        vitalsChart.data.labels.push(`H${obs.current_step}`);
+        vitalsChart.data.datasets[0].data.push(v.map);
+        vitalsChart.data.datasets[1].data.push(v.hr);
+        vitalsChart.data.datasets[2].data.push(v.spo2);
+        vitalsChart.data.datasets[3].data.push(v.rr);
+        vitalsChart.update();
+    }
+
+    // =========================================================================
+    // LOG
+    // =========================================================================
+    function clearLog() {
+        document.getElementById('logContainer').innerHTML = '';
+        document.getElementById('logCount').textContent = '0 entries';
+    }
+
+    function addLog(step, action, detail) {
+        const container = document.getElementById('logContainer');
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+        const rewardClass = detail.startsWith('R: -') ? 'negative' : '';
+        entry.innerHTML = `
+            <span class="log-step">T${step}</span>
+            <span class="log-action">${action}</span>
+            <span class="log-reward ${rewardClass}">${detail}</span>
+        `;
+        container.insertBefore(entry, container.firstChild);
+        document.getElementById('logCount').textContent =
+            `${container.children.length} entries`;
+    }
+
+    function addAlert(step, severity, message) {
+        const container = document.getElementById('logContainer');
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+        entry.innerHTML = `
+            <span class="log-step">T${step}</span>
+            <span class="log-alert ${severity}">[${severity.toUpperCase()}] ${message}</span>
+        `;
+        container.insertBefore(entry, container.firstChild);
+    }
+
+    // =========================================================================
+    // INIT
+    // =========================================================================
+    document.addEventListener('DOMContentLoaded', () => {
+        initChart();
+    });
+    </script>
+</body>
+</html>
