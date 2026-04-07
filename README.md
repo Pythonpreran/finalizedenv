@@ -11,14 +11,14 @@ short_description: "ICU drug titration AI benchmark"
 
 # 🏥 ICU Drug Titration Environment
 
-> 🚀 **OpenEnv Benchmark** | Healthcare AI | Decision-Making Under Risk
+> 🚀 **OpenEnv Round-1 Benchmark** | Healthcare AI | Decision-Making Under Risk
 
 > **Benchmarking AI decision-making under clinical risk, uncertainty, and multi-drug complexity.**
 >
 > Can an AI agent keep a critically ill patient alive for 24 hours — managing vasopressors, sedatives, and insulin — without killing them through drug interactions, overdoses, or indecision?
 
-[![OpenEnv Compatible](https://img.shields.io/badge/OpenEnv-Compatible-blue)](https://github.com/meta-pytorch/OpenEnv)
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-green)](https://python.org)
+[![OpenEnv Compatible](https://img.shields.io/badge/OpenEnv-Round_1-blue)](https://github.com/meta-pytorch/OpenEnv)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-green)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
 ---
@@ -42,7 +42,7 @@ Most AI benchmarks test knowledge retrieval or code generation. **This environme
 A fully deterministic, clinically grounded OpenEnv-compliant RL environment where an AI agent acts as an ICU clinical pharmacist, managing drug titration across a simulated patient episode.
 
 | Dimension | Details |
-|-----------|---------|
+|-----------|-|
 | **Drugs** | 6 — norepinephrine, vasopressin, dobutamine, propofol, fentanyl, insulin |
 | **Vitals** | 5 — MAP, HR, SpO₂, RR, Temperature |
 | **Labs** | 4 — glucose, creatinine, potassium, lactate |
@@ -60,9 +60,9 @@ A fully deterministic, clinically grounded OpenEnv-compliant RL environment wher
 
 | Task | Disease | Drugs | Horizon | Difficulty |
 |------|---------|-------|---------|------------|
-| **Easy** | Vasopressor shock | norepinephrine | 12h | 🟢 Single-variable MAP control |
-| **Medium** | Ventilated sedation | norepinephrine, propofol, fentanyl | 20h | 🟡 Multi-drug with interaction risk |
-| **Hard** | Septic shock + renal failure | All 6 drugs | 24h | 🔴 Full complexity: renal, metabolic, hemodynamic |
+| **Easy** | Vasopressor shock | norepinephrine | 12 steps | 🟢 Single-variable MAP control |
+| **Medium** | Ventilated sedation | norepinephrine, propofol, fentanyl | 20 steps | 🟡 Multi-drug with interaction risk |
+| **Hard** | Septic shock + renal failure | All 6 drugs | 24 steps | 🔴 Full complexity: renal, metabolic, hemodynamic |
 
 ---
 
@@ -86,7 +86,7 @@ The environment follows a standard **observe → decide → act → repeat** loo
 4. **Reward** — A dense reward signal (+0.1 per stable vital, escalating penalties for sustained interactions, penalties for invalid actions/overdoses/death) guides learning.
 5. **Repeat** — Until the episode ends (horizon reached, patient death, or physician flagged).
 
-> **Gradual deterioration, not binary failure.** Patient vitals deteriorate continuously each hour according to disease-specific rates (e.g., MAP −1.5 mmHg/hr in septic shock). Three threshold tiers — *safe*, *out-of-range*, and *critical (lethal)* — provide a wide buffer zone before terminal events. For example, MAP must fall from the safe floor of 65 mmHg all the way to 30 mmHg before triggering death. The agent receives multiple warning steps with visible trends and clinical alerts, allowing timely intervention.
+> **Gradual deterioration, not binary failure.** Patient vitals deteriorate continuously each hour according to disease-specific rates (e.g., MAP −1.5 mmHg/hr in septic shock). Three threshold tiers — *safe*, *out-of-range*, and *critical (lethal)* — provide a wide buffer zone before terminal events. The agent receives multiple warning steps with visible trends and clinical alerts, allowing timely intervention.
 
 > The environment is **fully stateless over HTTP** — any agent (LLM, RL, heuristic) can interact via the REST API.
 
@@ -113,7 +113,7 @@ Where `undrugged_state = baseline + accumulated_deterioration`.
 ### Drug Effect Table
 
 | Drug | MAP | HR | SpO₂ | RR | Key Lab Effects |
-|------|-----|-----|------|-----|-----------------|
+|------|-----|-----|------|-----|-|
 | **Norepinephrine** | ↑↑↑ +300×dose | ↑ +80×dose | — | — | Lactate ↓ |
 | **Vasopressin** | ↑↑↑ +1000×dose | ↓ -350×dose | — | — | Lactate ↓ |
 | **Dobutamine** | ↑ +1.5×dose | ↑↑ +2.5×dose | ↑ +0.5×dose | — | Creatinine ↓, Lactate ↓ |
@@ -239,11 +239,14 @@ pip install -r requirements.txt
 ### Run Tests (no server or API key needed)
 
 ```bash
-# Full unit test suite (32 tests)
+# Full unit test suite
 python -m pytest tests/test_environment.py -v
 
-# Audit fix verification tests
+# Fix verification tests
 python test_fixes.py
+
+# Multi-drug incentive tests
+python test_multidrug.py
 ```
 
 ### Start the API Server
@@ -252,27 +255,30 @@ python test_fixes.py
 python app.py
 # → Server at http://localhost:7860
 # → Swagger docs at http://localhost:7860/docs
+# → ReDoc at http://localhost:7860/redoc
 ```
 
 ### Run the LLM Inference Agent
 
 ```bash
-# Set your API key
-export OPENAI_API_KEY=sk-...        # Linux/Mac
-set OPENAI_API_KEY=sk-...           # Windows
-
-# Optional: set model (defaults to gpt-4o-mini)
-export MODEL_NAME=gpt-4o-mini
+# Required environment variables
+export API_BASE_URL=http://localhost:7860   # Environment server URL
+export MODEL_NAME=gpt-4o-mini              # LLM model name
+export HF_TOKEN=hf_...                     # Or OPENAI_API_KEY=sk-...
 
 # Run against all 3 tasks (requires server running)
 python inference.py
 ```
 
-### Run Baseline Evaluation
+### Run the Baseline Evaluation
 
 ```bash
-# Requires server running
-python baseline.py --mode heuristic
+# Heuristic baseline (no API key needed, server must be running)
+python baseline.py --mode heuristic --server-url http://localhost:7860
+
+# LLM baseline (requires OpenAI API key)
+export OPENAI_API_KEY=sk-...
+python baseline.py --mode llm --model gpt-4o-mini
 ```
 
 ### Docker
@@ -282,9 +288,78 @@ docker build -t icu-drug-titration .
 docker run -p 7860:7860 icu-drug-titration
 ```
 
+### Pre-Validation (before submission)
+
+```bash
+bash pre_validate.sh
+```
+
+This script verifies:
+1. Server responds to `/reset`
+2. Docker image builds successfully
+3. `openenv validate` passes (if CLI is installed)
+
 ### HuggingFace Spaces
 
 Deploy directly — the Dockerfile is configured for port 7860.
+
+---
+
+## 🔧 Environment Variables
+
+### Inference Agent
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `API_BASE_URL` | No | `http://localhost:7860` | URL of the ICU environment server |
+| `MODEL_NAME` | No | `gpt-4o-mini` | LLM model identifier |
+| `HF_TOKEN` | Yes* | — | HuggingFace token for LLM authentication |
+| `OPENAI_API_KEY` | Yes* | — | OpenAI API key (takes priority over `HF_TOKEN`) |
+
+*At least one of `HF_TOKEN` or `OPENAI_API_KEY` must be set.
+
+### Server
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PORT` | No | `7860` | Port the FastAPI server listens on |
+
+---
+
+## 📤 Structured Stdout (OpenEnv Compliance)
+
+`inference.py` emits **only** three structured log line types to stdout. No banners, debug prints, or extra output.
+
+### Format
+
+```
+[START] task=<task_name> env=icu_drug_titration model=<model_name>
+[STEP]  step=<n> action=<action_json> reward=<0.00> done=<true|false> error=<msg|null>
+[END]   success=<true|false> steps=<n> score=<0.00> rewards=<r1,r2,...>
+```
+
+### Rules
+
+| Rule | Detail |
+|------|--------|
+| One `[START]` per task | Emitted after `/reset` succeeds, before the step loop |
+| One `[STEP]` per step | Emitted after each `/step` response is received |
+| One `[END]` per task | Emitted after grading, with collected per-step rewards |
+| Rewards | Formatted to 2 decimal places (`{reward:.2f}`) |
+| Booleans | Lowercase `true` / `false` |
+| Error field | Always present — value or `null` |
+| No extra stdout | All diagnostics go to `stderr` |
+
+### Example Output
+
+```
+[START] task=easy env=icu_drug_titration model=gpt-4o-mini
+[STEP]  step=1 action={"action_type": "add_drug", "drug": "norepinephrine", "dose": 0.1} reward=0.35 done=false error=null
+[STEP]  step=2 action={"action_type": "hold"} reward=0.45 done=false error=null
+...
+[STEP]  step=12 action={"action_type": "hold"} reward=0.60 done=true error=null
+[END]   success=true steps=12 score=0.72 rewards=0.35,0.45,0.50,0.55,0.55,0.60,0.60,0.60,0.60,0.60,0.60,0.60
+```
 
 ---
 
@@ -292,13 +367,17 @@ Deploy directly — the Dockerfile is configured for port 7860.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/health` | GET | Health check |
+| `/` | GET | ICU monitoring dashboard (HTML UI) |
+| `/` | HEAD | Health probe (empty response) |
+| `/health` | GET | Health check (JSON status) |
 | `/reset` | POST | Reset environment for a new episode |
 | `/step` | POST | Execute one action step |
 | `/state` | GET | Full episode state with history |
-| `/tasks` | GET | List available tasks |
+| `/tasks` | GET | List available tasks with configs |
 | `/grader` | GET | Grade a completed episode |
-| `/baseline` | GET | Run heuristic baseline |
+| `/baseline` | GET | Run heuristic baseline and return scores |
+| `/docs` | GET | Swagger UI (interactive API explorer) |
+| `/redoc` | GET | ReDoc API documentation |
 
 ### Reset
 
@@ -312,7 +391,7 @@ curl -X POST http://localhost:7860/reset \
 
 ### Step
 
-The `/step` endpoint accepts the `Action` model **directly** as the request body.
+The `/step` endpoint accepts the `Action` model directly as the request body.
 
 ```bash
 curl -X POST "http://localhost:7860/step?session_id=<SESSION_ID>" \
@@ -354,15 +433,15 @@ curl -X POST "http://localhost:7860/step?session_id=<SESSION_ID>" \
 Performance of a prompted LLM agent (GPT-4o-mini, stability-first strategy) across all three tasks:
 
 | Task | Score | Interpretation |
-|------|-------|---------------|
+|------|-------|-----|
 | **Easy** | ~0.70 | ✅ Stable single-variable MAP control. The agent learns to titrate norepinephrine and hold once stable. |
 | **Medium** | ~0.75 – 0.86 | ✅ Multi-drug reasoning works. Agent avoids lethal propofol+fentanyl interaction and balances sedation with hemodynamics. |
-| **Hard** | ~0.19 | ⚠️ Exposes real limitations. Simultaneous management of sepsis, renal failure, hyperglycemia, and electrolyte imbalance overwhelms current models. |
+| **Hard** | ~0.07 | ⚠️ Exposes real limitations. Simultaneous management of sepsis, renal failure, hyperglycemia, and electrolyte imbalance overwhelms current models. |
 
 **What this tells us:**
 - Easy and medium tasks validate that LLMs *can* make safe sequential clinical decisions when the problem is well-scoped.
 - The hard task is a genuine unsolved challenge — it requires multi-variable reasoning, long-horizon planning, and understanding of cascading drug effects that current models struggle with.
-- The gap between medium (~0.80) and hard (~0.19) is not a bug — it reflects the real clinical complexity gap between managing 2–3 drugs vs. 6 drugs with renal constraints.
+- The gap between medium (~0.80) and hard (~0.07) is not a bug — it reflects the real clinical complexity gap between managing 2–3 drugs vs. 6 drugs with renal constraints.
 
 ---
 
@@ -372,11 +451,11 @@ From extensive experimentation with both heuristic and LLM agents:
 
 1. **Stability > Aggression.** Agents that make small, incremental dose changes and hold when stable consistently outperform agents that aggressively chase target ranges. Overcorrection causes oscillations that compound over time.
 
-2. **AI oscillation is the #1 failure mode.** Without explicit constraints, LLMs tend to titrate up one step and down the next — creating dangerous vital sign swings. The inference script includes dose smoothing to counteract this.
+2. **AI oscillation is the #1 failure mode.** Without explicit constraints, LLMs tend to titrate up one step and down the next — creating dangerous vital sign swings. The inference script includes dose smoothing (max 50% dose change per step) to counteract this.
 
 3. **Drug interactions are the hidden killer.** The medium task's challenge isn't individual drug dosing — it's avoiding the propofol + fentanyl respiratory depression trap. Agents that naively add both drugs kill the patient. The escalating penalties ensure that tolerating interactions is never a viable long-term strategy.
 
-4. **The hard task is genuinely hard.** With 6 drugs, 5 deteriorating vitals, 4 abnormal labs, and cascading interactions, the hard task approaches real ICU complexity. A score of ~0.19 is not a failure of the environment — it's an honest signal about the frontier of AI clinical reasoning.
+4. **The hard task is genuinely hard.** With 6 drugs, 5 deteriorating vitals, 4 abnormal labs, and cascading interactions, the hard task approaches real ICU complexity. A score of ~0.07 is not a failure of the environment — it's an honest signal about the frontier of AI clinical reasoning.
 
 5. **Lab management adds information cost.** Since labs are only refreshed on `order_lab`, the agent must decide when spending a step on information is more valuable than drug management — a realistic clinical tradeoff.
 
@@ -384,38 +463,54 @@ From extensive experimentation with both heuristic and LLM agents:
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Project Structure
 
 ```
-Project/
-├── pharmacology_constants.py  # Drug effects (equilibrium model), ranges, interactions, rewards
-├── models.py                  # Pydantic data contracts (Observation, Action, Reward, State)
-├── patient_simulator.py       # Equilibrium-based physiology simulation engine
-├── icu_env.py                 # OpenEnv RL environment with session management
-├── grader.py                  # Deterministic grading (per-drug smoothness, actual labs)
-├── app.py                     # FastAPI server (REST API)
-├── baseline.py                # Baseline evaluation script
-├── inference.py               # LLM inference agent (dose smoothing, fallback policy)
-├── openenv.yaml               # OpenEnv manifest
-├── Dockerfile                 # Container deployment
-├── requirements.txt           # Dependencies
-├── test_fixes.py              # Fix verification tests
+project_v2_r2/
+├── app.py                     # FastAPI server — REST API with CORS, static serving, all endpoints
+├── inference.py               # LLM inference agent — adaptive pacing, dose smoothing, OpenEnv stdout
+├── baseline.py                # Baseline evaluation — heuristic and LLM modes with argparse CLI
+├── icu_env.py                 # RL environment — session management, reward computation, step/reset/state
+├── patient_simulator.py       # Physiology engine — equilibrium drug model, interactions, noise, lethality
+├── grader.py                  # Deterministic graders — per-drug smoothness, actual-lab scoring
+├── models.py                  # Pydantic data contracts — Observation, Action, Reward, State, API models
+├── pharmacology_constants.py  # All simulation parameters — drug effects, ranges, diseases, rewards
+│
+├── server/
+│   └── app.py                 # Alternate entry point (for `python -m server.app` or pyproject.toml script)
+│
 ├── static/
-│   └── index.html             # ICU monitoring dashboard
-└── tests/
-    └── test_environment.py    # Unit tests (32 tests)
+│   └── index.html             # ICU monitoring dashboard — dark-themed, Chart.js vitals, action controls
+│
+├── tests/
+│   └── test_environment.py    # Pytest unit test suite (no server needed)
+│
+├── test_fixes.py              # Functional tests — equilibrium model, lab gating, escalating penalties
+├── test_multidrug.py          # Multi-drug incentive verification — reward comparison, coverage bonus
+│
+├── openenv.yaml               # OpenEnv manifest — tasks, models, evaluation, server config
+├── Dockerfile                 # Container deployment — python:3.11-slim, port 7860, health check
+├── requirements.txt           # pip dependencies — fastapi, uvicorn, pydantic, numpy, openai, httpx, pytest
+├── pyproject.toml             # Project metadata — name, version 1.0.0, Python ≥3.10, script entry points
+├── pre_validate.sh            # Pre-submission checks — server ping, Docker build, openenv validate
+├── uv.lock                    # uv lockfile for reproducible installs
+└── .gitattributes             # Git LFS tracking rules (HuggingFace Spaces convention)
 ```
 
 ### Component Responsibilities
 
 | Component | Responsibility |
-|-----------|---------------|
-| `pharmacology_constants.py` | All simulation parameters: drug multipliers (equilibrium offsets), vital/lab ranges, disease profiles, interaction definitions, reward constants |
-| `patient_simulator.py` | Core simulation: equilibrium drug model, disease deterioration, lab gating, dose validation, interaction detection, lethal threshold checks |
-| `icu_env.py` | Session management, reward computation (escalating penalties, invalid action penalties), random seed generation, step/reset/state API |
-| `grader.py` | Post-episode grading: vital/lab stability scoring, per-drug normalized smoothness, lactate clearance, renal management |
-| `inference.py` | LLM agent: prompt construction, JSON action parsing, dose smoothing, fallback policy for API/parsing failures |
-| `app.py` | REST API: FastAPI endpoints, CORS, static file serving, health checks |
+|-----------|--------|
+| `app.py` | FastAPI server with REST endpoints (`/reset`, `/step`, `/state`, `/tasks`, `/grader`, `/baseline`, `/health`), CORS middleware, static file serving for the dashboard, and a built-in heuristic baseline runner |
+| `inference.py` | Production LLM agent with adaptive pacing (ACT→WAIT→OBSERVE→ADJUST), stability heuristic, dose smoothing (max 50% per step), auto-correction of add_drug→titrate for active drugs, multi-step conversation memory, MAP-based fallback policy, and strict OpenEnv-compliant structured stdout |
+| `baseline.py` | CLI-based evaluation script supporting both heuristic (no API key) and LLM-powered (OpenAI) baseline modes, with deterministic seeding and full grading output |
+| `icu_env.py` | OpenEnv-compliant environment with multi-session support, dense reward computation (escalating interaction penalties, invalid action penalties, multi-coverage bonus, deterioration pressure), Gymnasium-style `terminated`/`truncated` flags, and `StepRecord` history with actual labs |
+| `patient_simulator.py` | Core physiology simulation: equilibrium-based drug effect offsets, disease-specific deterioration, drug-drug interaction detection and offset application, seeded Gaussian biological noise, dose validation with clamping, lab visibility gating, and lethal threshold checking |
+| `grader.py` | Deterministic post-episode grading with task-specific weighting — per-drug normalized smoothness scoring, actual lab values for grading (not stale observations), lactate clearance tracking, and renal management scoring |
+| `models.py` | Type-safe Pydantic v2 data contracts: `Vitals`, `Labs`, `DrugInfo`, `Alert`, `Action` (with `ActionType` enum), `Observation`, `Reward`, `StepRecord`, `State`, and API request/response models (`ResetRequest`, `StepResponse`, `GradeResponse`, `TaskInfo`, `HealthResponse`, `BaselineResponse`) |
+| `pharmacology_constants.py` | All simulation constants: drug effect multipliers (equilibrium offsets), dose ranges with units, vital/lab safe/clamp/critical ranges, three `DiseaseProfile` definitions with baselines and deterioration rates, critical and warning interaction definitions, Gaussian noise σ values, task definitions, and reward constants |
+| `server/app.py` | Thin wrapper that imports the main `app` and exposes a `main()` entry point for `pyproject.toml` script invocation |
+| `pre_validate.sh` | Bash script for pre-submission compliance checks: pings `/reset`, builds Docker image, runs `openenv validate` if available |
 
 ---
 
@@ -443,6 +538,44 @@ This environment is built with RL benchmark integrity in mind:
 5. **No memorization.** Random seeds by default ensure each episode has a unique noise trajectory. Explicit seeds are available for reproducibility.
 6. **LLM-honest benchmarking.** The inference agent always consults the LLM — no hardcoded heuristic silently bypasses model reasoning.
 7. **Grading fidelity.** Dose smoothness is computed per-drug with unit normalization. Lab grading uses actual patient values, not stale observations.
+8. **Clean stdout contract.** `inference.py` emits only `[START]`, `[STEP]`, and `[END]` lines to stdout — no banners, no debug output, no extra logging. All diagnostics are routed to stderr.
+
+---
+
+## ✅ OpenEnv Round-1 Compliance
+
+| Requirement | Status |
+|-------------|--------|
+| Structured `[START]`/`[STEP]`/`[END]` stdout | ✅ Implemented via `emit_start()`, `emit_step()`, `emit_end()` |
+| No extra stdout logging | ✅ All diagnostics use `sys.stderr` |
+| `API_BASE_URL` env variable | ✅ Read with default `http://localhost:7860` |
+| `MODEL_NAME` env variable | ✅ Read with default `gpt-4o-mini` |
+| `HF_TOKEN` env variable | ✅ Read as fallback for `OPENAI_API_KEY` |
+| `inference.py` at project root | ✅ |
+| Max steps / episode limit | ✅ `MAX_STEPS=30`, 3 fixed tasks |
+| `Dockerfile` present | ✅ `python:3.11-slim`, port 7860 |
+| `openenv.yaml` present | ✅ Full manifest with tasks, models, evaluation |
+| Pre-validation script | ✅ `pre_validate.sh` |
+| Rewards formatted to 2 decimals | ✅ `{reward:.2f}` |
+| Booleans lowercase | ✅ `true` / `false` via `_bool()` helper |
+
+---
+
+## 📦 Dependencies
+
+Defined in `requirements.txt`:
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `fastapi` | ≥0.100.0 | REST API framework |
+| `uvicorn` | ≥0.20.0 | ASGI server |
+| `pydantic` | ≥2.0.0 | Data validation & serialization |
+| `numpy` | ≥1.24.0 | Biological noise (Gaussian), random seeding |
+| `openai` | ≥1.0.0 | LLM client for inference agent |
+| `httpx` | ≥0.24.0 | HTTP client for API communication |
+| `pytest` | ≥7.0.0 | Unit testing framework |
+
+Additional `pyproject.toml` dependency: `openenv-core ≥0.2.0` (OpenEnv ecosystem integration).
 
 ---
 

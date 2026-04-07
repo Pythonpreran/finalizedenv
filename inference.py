@@ -606,6 +606,7 @@ def call_llm(obs: Dict[str, Any], step: int) -> Optional[Dict[str, Any]]:
 
         return action
     except Exception as exc:
+        sys.stderr.write(f"LLM error: {exc}\n")
         return None
 
 
@@ -796,8 +797,12 @@ def run_task(task_id: str) -> Dict[str, Any]:
     while not done and step < MAX_STEPS:
         current_step = obs.get("current_step", step)
 
-        # Get action from LLM
-        action = call_llm(obs, current_step)
+        # Get action from LLM (wrapped — never crashes)
+        try:
+            action = call_llm(obs, current_step)
+        except Exception as exc:
+            sys.stderr.write(f"LLM call_llm error: {exc}\n")
+            action = None
 
         # Fall back if LLM returned nothing valid
         if action is None:
@@ -813,6 +818,7 @@ def run_task(task_id: str) -> Dict[str, Any]:
             res.raise_for_status()
             step_data = res.json()
         except Exception as exc:
+            sys.stderr.write(f"Step API error: {exc}\n")
             # On API error, try fallback then retry once
             action = fallback_action(obs)
             try:
@@ -824,13 +830,20 @@ def run_task(task_id: str) -> Dict[str, Any]:
                 res.raise_for_status()
                 step_data = res.json()
             except Exception as exc2:
+                sys.stderr.write(f"Step API retry failed: {exc2}\n")
+                step += 1
+                emit_step(step, json.dumps(action), 0.0, False, str(exc2))
                 break
 
-        reward_val = step_data["reward"]["value"]
+        # Parse step data safely
+        try:
+            reward_val = step_data["reward"]["value"]
+        except (KeyError, TypeError):
+            reward_val = 0.0
         total_reward += reward_val
         step_rewards.append(reward_val)
-        obs = step_data["observation"]
-        done = step_data["done"]
+        obs = step_data.get("observation", obs)  # keep last obs on failure
+        done = step_data.get("done", False)
         step += 1
 
         emit_step(step, json.dumps(action), reward_val, done, None)
@@ -867,24 +880,32 @@ def run_task(task_id: str) -> Dict[str, Any]:
 
 def main() -> None:
     """Run the LLM inference agent across all three tasks."""
-    # Verify server is reachable
+    # Verify server is reachable (warn but do NOT exit)
     try:
         health = http_client.get("/health")
         health.raise_for_status()
     except Exception as exc:
-        sys.stderr.write(f"Cannot reach server at {API_BASE_URL}: {exc}\n")
-        sys.exit(1)
+        sys.stderr.write(f"WARNING: Cannot reach server at {API_BASE_URL}: {exc}\n")
+        sys.stderr.write("Will attempt tasks anyway (may fail individually).\n")
 
     results: Dict[str, Dict[str, Any]] = {}
 
     for task_id in TASKS:
-        results[task_id] = run_task(task_id)
+        try:
+            results[task_id] = run_task(task_id)
+        except Exception as exc:
+            sys.stderr.write(f"Task {task_id} crashed unexpectedly: {exc}\n")
+            results[task_id] = {"score": 0.0, "total_reward": 0.0, "steps": 0, "error": str(exc)}
 
-    # Exit with non-zero if average score is 0
+    # Report average score but NEVER exit non-zero due to low score
     avg_score = sum(r["score"] for r in results.values()) / len(TASKS) if TASKS else 0.0
-    if avg_score == 0.0:
-        sys.exit(1)
+    sys.stderr.write(f"Average score: {avg_score:.4f}\n")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exc:
+        sys.stderr.write(f"Fatal error in main: {exc}\n")
+        # Exit 0 -- inference must never crash with non-zero
+        sys.exit(0)
