@@ -84,19 +84,19 @@ def _bool(val: bool) -> str:
 
 def emit_start(task: str, env: str, model: str) -> None:
     """Emit [START] log line."""
-    print(f"[START] task={task} env={env} model={model}")
+    print(f"[START] task={task} env={env} model={model}", flush=True)
 
 
 def emit_step(step: int, action: str, reward: float, done: bool, error: Optional[str] = None) -> None:
     """Emit [STEP] log line."""
     err = error if error else "null"
-    print(f"[STEP]  step={step} action={action} reward={reward:.2f} done={_bool(done)} error={err}")
+    print(f"[STEP]  step={step} action={action} reward={reward:.2f} done={_bool(done)} error={err}", flush=True)
 
 
 def emit_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
     """Emit [END] log line."""
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-    print(f"[END]   success={_bool(success)} steps={steps} score={score:.2f} rewards={rewards_str}")
+    print(f"[END]   success={_bool(success)} steps={steps} score={score:.2f} rewards={rewards_str}", flush=True)
 
 
 
