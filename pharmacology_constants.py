@@ -316,12 +316,6 @@ WARNING_INTERACTIONS: Dict[frozenset, Tuple[str, str, str, float]] = {
         "glucose",
         -15.0,  # Enhanced glucose lowering
     ),
-    frozenset({"fentanyl", "propofol"}): (
-        "warning",
-        "Apnea risk: combined respiratory depression from dual sedation",
-        "rr",
-        -3.0,  # Additional RR reduction
-    ),
 }
 
 # =============================================================================

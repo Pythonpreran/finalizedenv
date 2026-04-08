@@ -44,7 +44,8 @@ except ImportError:
 # CONFIGURATION
 # =============================================================================
 
-API_BASE_URL: str = os.environ.get("API_BASE_URL", "http://localhost:7860")
+API_BASE_URL: str = os.environ.get("API_BASE_URL", "https://router.huggingface.co/v1")
+ENV_URL: str = os.environ.get("ENV_URL", "http://localhost:7860")
 MODEL_NAME: str = os.environ.get("MODEL_NAME", "gpt-4o-mini")
 
 # Resolve API key: prefer OPENAI_API_KEY, fall back to HF_TOKEN
@@ -253,14 +254,17 @@ Valid action_type values:
 # OPENAI CLIENT
 # =============================================================================
 
-openai_client = OpenAI(api_key=_api_key)
+openai_client = OpenAI(
+    api_key=_api_key,
+    base_url=API_BASE_URL,
+)
 
 
 # =============================================================================
 # HTTP CLIENT
 # =============================================================================
 
-http_client = httpx.Client(base_url=API_BASE_URL, timeout=60.0)
+http_client = httpx.Client(base_url=ENV_URL, timeout=60.0)
 
 
 # =============================================================================
